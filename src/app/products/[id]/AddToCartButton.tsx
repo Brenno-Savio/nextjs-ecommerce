@@ -23,10 +23,10 @@ export default function AddToCartButton({
           startTransaction(async () => {
             await incrementProductQuantity(productId);
             setSuccess(true);
+            setTimeout(() => {
+              setSuccess(false)
+            }, 2000)
           });
-          setTimeout(() => {
-            setSuccess(false);
-          }, 2000);
         }}
       >
         Add to Cart

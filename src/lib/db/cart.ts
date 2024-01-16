@@ -7,6 +7,10 @@ export type CartWithProducts = Prisma.CartGetPayload<{
   include: { items: { include: { product: true } } };
 }>;
 
+export type CartItemWithProduct = Prisma.CartItemGetPayload<{
+  include: { product: true };
+}>;
+
 export type ShoppingCart = CartWithProducts & {
   size: number;
   subtotal: number;
@@ -35,15 +39,12 @@ export async function getCart(): Promise<ShoppingCart | null> {
 
   if (!cart) return null;
 
-  console.log(cart);
-  
-
   return {
     ...cart,
     size: cart.items.reduce((acc, item) => acc + item.quantity, 0),
     subtotal: cart.items.reduce(
       (acc, item) => acc + item.quantity * item.product.price,
-      0
+      0,
     ),
   };
 }
@@ -56,9 +57,6 @@ export async function createCart(): Promise<ShoppingCart> {
   const cartId = await bcrypt.hashSync(newCart.id, salt);
 
   cookies().set('localCartId', cartId);
-
-  console.log(newCart);
-  
 
   return {
     ...newCart,
