@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { cookies } from 'next/dist/client/components/headers';
+import { env } from '../env';
 import { prisma } from './prisma';
 
 export type CartWithProducts = Prisma.CartGetPayload<{
@@ -53,7 +54,7 @@ export async function createCart(): Promise<ShoppingCart> {
   const newCart = await prisma.cart.create({
     data: {},
   });
-  const salt = await bcrypt.genSaltSync(Number(process.env.SALT));
+  const salt = await bcrypt.genSaltSync(Number(env.SALT));
   const cartId = await bcrypt.hashSync(newCart.id, salt);
 
   cookies().set('localCartId', cartId);
