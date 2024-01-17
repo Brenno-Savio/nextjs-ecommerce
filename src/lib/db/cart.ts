@@ -1,5 +1,7 @@
-import { Prisma } from '@prisma/client';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { Cart, CartItem, Prisma } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import { getServerSession } from 'next-auth';
 import { cookies } from 'next/dist/client/components/headers';
 import { env } from '../env';
 import { prisma } from './prisma';
@@ -18,25 +20,36 @@ export type ShoppingCart = CartWithProducts & {
 };
 
 export async function getCart(): Promise<ShoppingCart | null> {
-  const localCartId = cookies().get('localCartId')?.value;
-  if (!localCartId) return null;
-  let myCartId;
+  const session = await getServerSession(authOptions);
 
-  const listCartId = await prisma.cart.findMany({ select: { id: true } });
-  for (const cartId of listCartId) {
-    let comparison = await bcrypt.compareSync(cartId.id, localCartId);
-    comparison === true ? (myCartId = cartId.id) : null;
+  let cart: CartWithProducts | null = null;
+
+  if (session) {
+    cart = await prisma.cart.findFirst({
+      where: { userId: session.user.id },
+      include: { items: { include: { product: true } } },
+    });
+  } else {
+    const localCartId = cookies().get('localCartId')?.value;
+    if (!localCartId) return null;
+    let myCartId;
+
+    const listCartId = await prisma.cart.findMany({ select: { id: true } });
+    for (const cartId of listCartId) {
+      let comparison = await bcrypt.compareSync(cartId.id, localCartId);
+      comparison === true ? (myCartId = cartId.id) : null;
+    }
+
+    if (!myCartId) return null;
+
+    cart =
+      myCartId !== undefined
+        ? await prisma.cart.findUnique({
+            where: { id: myCartId },
+            include: { items: { include: { product: true } } },
+          })
+        : null;
   }
-
-  if (!myCartId) return null;
-
-  const cart =
-    myCartId !== undefined
-      ? await prisma.cart.findUnique({
-          where: { id: myCartId },
-          include: { items: { include: { product: true } } },
-        })
-      : null;
 
   if (!cart) return null;
 
@@ -51,9 +64,20 @@ export async function getCart(): Promise<ShoppingCart | null> {
 }
 
 export async function createCart(): Promise<ShoppingCart> {
-  const newCart = await prisma.cart.create({
-    data: {},
-  });
+  const session = await getServerSession(authOptions);
+
+  let newCart: Cart;
+
+  if (session) {
+    newCart = await prisma.cart.create({
+      data: { userId: session.user.id },
+    });
+  } else {
+    newCart = await prisma.cart.create({
+      data: {},
+    });
+  }
+
   const salt = await bcrypt.genSaltSync(Number(env.SALT));
   const cartId = await bcrypt.hashSync(newCart.id, salt);
 
@@ -65,4 +89,85 @@ export async function createCart(): Promise<ShoppingCart> {
     size: 0,
     subtotal: 0,
   };
+}
+
+export async function mergeAnonymousCartIntoUserCart(userId: string) {
+  const localCartId = cookies().get('localCartId')?.value;
+  if (!localCartId) return null;
+  let myCartId;
+
+  const listCartId = await prisma.cart.findMany({ select: { id: true } });
+  for (const cartId of listCartId) {
+    let comparison = await bcrypt.compareSync(cartId.id, localCartId);
+    comparison === true ? (myCartId = cartId.id) : null;
+  }
+
+  if (!myCartId) return null;
+
+  const localCart =
+    myCartId !== undefined
+      ? await prisma.cart.findUnique({
+          where: { id: myCartId },
+          include: { items: true },
+        })
+      : null;
+
+  if (!localCart) return;
+
+  const userCart = await prisma.cart.findFirst({
+    where: { userId },
+    include: { items: true },
+  });
+
+  await prisma.$transaction(async (tx) => {
+    if (userCart) {
+      const mergedCartItems = mergeCartItems(localCart.items, userCart.items);
+
+      await tx.cartItem.deleteMany({
+        where: { cartId: userCart.id },
+      });
+
+      await tx.cartItem.createMany({
+        data: mergedCartItems.map((item) => ({
+          cartId: userCart.id,
+          productId: item.productId,
+          quantity: item.quantity,
+        })),
+      });
+    } else {
+      await tx.cart.create({
+        data: {
+          userId,
+          items: {
+            createMany: {
+              data: localCart.items.map((item) => ({
+                productId: item.productId,
+                quantity: item.quantity,
+              })),
+            },
+          },
+        },
+      });
+    }
+
+    await tx.cart.delete({
+      where: { id: localCart.id },
+    });
+
+    cookies().set('localCartId', '');
+  });
+}
+
+function mergeCartItems(...cartItems: CartItem[][]) {
+  return cartItems.reduce((acc, items) => {
+    items.forEach((item) => {
+      const existingItem = acc.find((i) => i.productId === item.productId);
+      if (existingItem) {
+        existingItem.quantity += item.quantity;
+      } else {
+        acc.push(item);
+      }
+    });
+    return acc;
+  }, [] as CartItem[]);
 }
