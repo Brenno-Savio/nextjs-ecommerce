@@ -1,8 +1,8 @@
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { Cart, CartItem, Prisma } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { getServerSession } from 'next-auth';
 import { cookies } from 'next/dist/client/components/headers';
+import { authOptions } from '../authOptions';
 import { env } from '../env';
 import { prisma } from './prisma';
 
