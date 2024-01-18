@@ -1,8 +1,9 @@
 import FormSubmitButton from '@/components/FormSubmitButton';
+import { authOptions } from '@/lib/authOptions';
 import { prisma } from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
-import { authOptions } from '../api/auth/[...nextauth]/route';
+
 
 export const metadata = {
   title: 'Add Product - Pantanal',

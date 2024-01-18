@@ -1,10 +1,10 @@
 import logo from '@/assets/logo.png';
+import { authOptions } from '@/lib/authOptions';
 import { getCart } from '@/lib/db/cart';
 import { getServerSession } from 'next-auth';
 import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { authOptions } from '../api/auth/[...nextauth]/route';
 import ShoppingCartButton from './ShoppingCartButton';
 import UserMenuButton from './UserMenuButton';
 
